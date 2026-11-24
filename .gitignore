@@ -1,0 +1,13 @@
+# Editors and OS files
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Local environment
+.env
+.env.*
+
+# Scratch output
+*.log
+/tmp/
