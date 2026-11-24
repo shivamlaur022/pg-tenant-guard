@@ -30,3 +30,12 @@ jobs:
         env:
           PG_VERSION: ${{ matrix.pg }}
           VERBOSE: "1"
+
+  supabase:
+    name: Supabase Postgres (smoke test)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install into supabase/postgres and run test/supabase/smoke.sql
+        run: ./scripts/test-supabase.sh

@@ -1,12 +1,13 @@
 PG_VERSION ?= 17
 
-.PHONY: help dist check-dist test test-all
+.PHONY: help dist check-dist test test-all test-supabase
 
 help:
-	@echo "make dist        Build dist/pg-tenant-guard.sql from sql/*.sql"
-	@echo "make check-dist  Fail if dist/pg-tenant-guard.sql is out of date"
-	@echo "make test        Rebuild dist, then run the test suite in Docker (PG_VERSION=$(PG_VERSION))"
-	@echo "make test-all    Run the test suite on PostgreSQL 16 and 17, one after the other"
+	@echo "make dist           Build dist/pg-tenant-guard.sql from sql/*.sql"
+	@echo "make check-dist     Fail if dist/pg-tenant-guard.sql is out of date"
+	@echo "make test           Rebuild dist, then run the test suite in Docker (PG_VERSION=$(PG_VERSION))"
+	@echo "make test-all       Run the test suite on PostgreSQL 16 and 17, one after the other"
+	@echo "make test-supabase  Install into the supabase/postgres image and run the smoke test"
 
 dist:
 	./scripts/build.sh
@@ -20,3 +21,6 @@ test: dist
 test-all: dist
 	PG_VERSION=16 ./scripts/test.sh
 	PG_VERSION=17 ./scripts/test.sh
+
+test-supabase: dist
+	./scripts/test-supabase.sh

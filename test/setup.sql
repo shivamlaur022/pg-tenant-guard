@@ -53,7 +53,6 @@ begin
       execute format('grant select, insert, update, delete on %s to app_user', obj.rel);
     end if;
   end loop;
-  execute format('grant usage on schema %s to app_user', pg_my_temp_schema()::regnamespace);
 end;
 $$;
 
