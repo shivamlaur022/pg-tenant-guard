@@ -91,3 +91,19 @@ as $$
     (tests.tenant_id('acme'),   tests.user_id('vera'),  'viewer'),
     (tests.tenant_id('globex'), tests.user_id('carol'), 'owner');
 $$;
+
+-- EXPLAIN output of a query as one text value, for plan-shape assertions.
+create function tests.plan_of(p_query text)
+returns text
+language plpgsql
+as $$
+declare
+  line text;
+  result text := '';
+begin
+  for line in execute 'explain (costs off) ' || p_query loop
+    result := result || line || E'\n';
+  end loop;
+  return result;
+end;
+$$;

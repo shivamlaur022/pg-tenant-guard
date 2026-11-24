@@ -89,10 +89,13 @@ comment on function tenant_guard.has_permission(uuid, text, tenant_guard.access_
 
 -- Set-returning form for policies:
 --
---   tenant_id in (select tenant_guard.permitted_tenant_ids('projects', 'edit'))
+--   tenant_id = any (array(select tenant_guard.permitted_tenant_ids('projects', 'edit')))
 --
--- PostgreSQL evaluates the subquery once per statement and then checks each
--- row against the result, instead of calling a function for every row.
+-- The array(select ...) is an uncorrelated subquery, so PostgreSQL runs it
+-- once per statement as an InitPlan. `tenant_id = any (<array>)` can then use
+-- an index on tenant_id. The shorter `tenant_id in (select ...)` also runs the
+-- function only once, but becomes a hashed SubPlan filter, which cannot use
+-- an index and scans the whole table.
 create or replace function tenant_guard.permitted_tenant_ids(
   p_permission text,
   p_mode       tenant_guard.access_mode default 'view'
@@ -122,21 +125,21 @@ comment on function tenant_guard.permitted_tenant_ids(text, tenant_guard.access_
 drop policy if exists tenants_update on tenant_guard.tenants;
 create policy tenants_update on tenant_guard.tenants
   for update
-  using (id in (select tenant_guard.permitted_tenant_ids('tenant_guard.tenant', 'edit')))
-  with check (id in (select tenant_guard.permitted_tenant_ids('tenant_guard.tenant', 'edit')));
+  using (id = any (array(select tenant_guard.permitted_tenant_ids('tenant_guard.tenant', 'edit'))))
+  with check (id = any (array(select tenant_guard.permitted_tenant_ids('tenant_guard.tenant', 'edit'))));
 
 drop policy if exists tenant_members_insert on tenant_guard.tenant_members;
 create policy tenant_members_insert on tenant_guard.tenant_members
   for insert
-  with check (tenant_id in (select tenant_guard.permitted_tenant_ids('tenant_guard.members', 'edit')));
+  with check (tenant_id = any (array(select tenant_guard.permitted_tenant_ids('tenant_guard.members', 'edit'))));
 
 drop policy if exists tenant_members_update on tenant_guard.tenant_members;
 create policy tenant_members_update on tenant_guard.tenant_members
   for update
-  using (tenant_id in (select tenant_guard.permitted_tenant_ids('tenant_guard.members', 'edit')))
-  with check (tenant_id in (select tenant_guard.permitted_tenant_ids('tenant_guard.members', 'edit')));
+  using (tenant_id = any (array(select tenant_guard.permitted_tenant_ids('tenant_guard.members', 'edit'))))
+  with check (tenant_id = any (array(select tenant_guard.permitted_tenant_ids('tenant_guard.members', 'edit'))));
 
 drop policy if exists tenant_members_delete on tenant_guard.tenant_members;
 create policy tenant_members_delete on tenant_guard.tenant_members
   for delete
-  using (tenant_id in (select tenant_guard.permitted_tenant_ids('tenant_guard.members', 'edit')));
+  using (tenant_id = any (array(select tenant_guard.permitted_tenant_ids('tenant_guard.members', 'edit'))));
