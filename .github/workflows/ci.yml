@@ -1,0 +1,29 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: PostgreSQL ${{ matrix.pg }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        pg: ["16", "17"]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run pgTAP suite
+        run: make test PG_VERSION=${{ matrix.pg }}
+        env:
+          VERBOSE: "1"
