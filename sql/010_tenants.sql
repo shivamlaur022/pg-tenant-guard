@@ -140,33 +140,14 @@ create policy tenants_select on tenant_guard.tenants
   for select
   using (id in (select tenant_guard.my_tenant_ids()));
 
-drop policy if exists tenants_update on tenant_guard.tenants;
-create policy tenants_update on tenant_guard.tenants
-  for update
-  using (tenant_guard.member_role(id) = 'owner')
-  with check (tenant_guard.member_role(id) = 'owner');
-
 -- Members can see who else belongs to their tenants.
 drop policy if exists tenant_members_select on tenant_guard.tenant_members;
 create policy tenant_members_select on tenant_guard.tenant_members
   for select
   using (tenant_id in (select tenant_guard.my_tenant_ids()));
 
-drop policy if exists tenant_members_insert on tenant_guard.tenant_members;
-create policy tenant_members_insert on tenant_guard.tenant_members
-  for insert
-  with check (tenant_guard.member_role(tenant_id) = 'owner');
-
-drop policy if exists tenant_members_update on tenant_guard.tenant_members;
-create policy tenant_members_update on tenant_guard.tenant_members
-  for update
-  using (tenant_guard.member_role(tenant_id) = 'owner')
-  with check (tenant_guard.member_role(tenant_id) = 'owner');
-
-drop policy if exists tenant_members_delete on tenant_guard.tenant_members;
-create policy tenant_members_delete on tenant_guard.tenant_members
-  for delete
-  using (tenant_guard.member_role(tenant_id) = 'owner');
+-- Policies for changing tenants and memberships are permission-based and
+-- defined in 020_permissions.sql.
 
 -- Role definitions are not secret; anyone with access to the schema may read them.
 drop policy if exists roles_select on tenant_guard.roles;

@@ -21,7 +21,8 @@ begin
   -- role, but never move a row to another tenant or rewrite its id.
   execute format('grant select, update (name) on tenant_guard.tenants to %I', p_role);
   execute format('grant select, insert, update (role), delete on tenant_guard.tenant_members to %I', p_role);
-  execute format('grant select on tenant_guard.roles to %I', p_role);
+  execute format('grant select on tenant_guard.roles, tenant_guard.role_permissions to %I', p_role);
+  execute format('grant usage on type tenant_guard.access_mode to %I', p_role);
 
   execute format(
     'grant execute on function
@@ -29,7 +30,9 @@ begin
        tenant_guard.is_member(uuid),
        tenant_guard.member_role(uuid),
        tenant_guard.my_tenant_ids(),
-       tenant_guard.create_tenant(text)
+       tenant_guard.create_tenant(text),
+       tenant_guard.has_permission(uuid, text, tenant_guard.access_mode),
+       tenant_guard.permitted_tenant_ids(text, tenant_guard.access_mode)
      to %I', p_role);
 end;
 $$;

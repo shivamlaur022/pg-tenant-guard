@@ -38,14 +38,14 @@ select is_empty(
   'no tenant_guard table is accessible to PUBLIC'
 );
 
--- The helpers that read membership data must be SECURITY DEFINER and STABLE.
+-- The helpers that read membership and permission data must be SECURITY DEFINER and STABLE.
 select is(
   (select array_agg(p.proname::text order by p.proname)
    from pg_proc p
    where p.pronamespace = 'tenant_guard'::regnamespace
      and p.prosecdef and p.provolatile = 's'),
-  array['is_member', 'member_role', 'my_tenant_ids'],
-  'membership helpers are SECURITY DEFINER and STABLE'
+  array['has_permission', 'is_member', 'member_role', 'my_tenant_ids', 'permitted_tenant_ids'],
+  'access helpers are SECURITY DEFINER and STABLE'
 );
 
 -- Administrative functions stay out of reach of client roles.
