@@ -1,7 +1,9 @@
 -- Schema-wide invariants. These guard against a new function or table being
 -- added without the usual hardening.
 begin;
-select plan(6);
+select plan(7);
+
+select matches(tenant_guard.version(), '^\d+\.\d+\.\d+$', 'version() returns a semantic version');
 
 select is_empty(
   $$ select p.oid::regprocedure::text

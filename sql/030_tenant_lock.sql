@@ -33,7 +33,7 @@ alter table tenant_guard.tenant_locks enable row level security;
 -- Locks a tenant, or updates the reason if it is already locked (keeping the
 -- original locked_at). Intended for your billing backend or admin tooling;
 -- not granted to client roles.
-create or replace function tenant_guard.lock_tenant(p_tenant_id uuid, p_reason text default null)
+create or replace function tenant_guard.lock_tenant(tenant_id uuid, reason text default null)
 returns void
 language plpgsql
 volatile
@@ -41,14 +41,16 @@ security definer
 set search_path = ''
 as $$
 begin
-  if not exists (select 1 from tenant_guard.tenants t where t.id = p_tenant_id) then
-    raise exception 'tenant % does not exist', p_tenant_id
+  if not exists (select 1 from tenant_guard.tenants t where t.id = lock_tenant.tenant_id) then
+    raise exception 'tenant % does not exist', lock_tenant.tenant_id
       using errcode = 'no_data_found';
   end if;
 
   insert into tenant_guard.tenant_locks (tenant_id, reason)
-  values (p_tenant_id, p_reason)
-  on conflict (tenant_id) do update set reason = excluded.reason;
+  values (lock_tenant.tenant_id, lock_tenant.reason)
+  -- ON CONFLICT names the constraint: a bare (tenant_id) would be ambiguous
+  -- with the parameter of the same name.
+  on conflict on constraint tenant_locks_pkey do update set reason = excluded.reason;
 end;
 $$;
 
@@ -56,7 +58,7 @@ comment on function tenant_guard.lock_tenant(uuid, text) is
   'Makes a tenant read-only on all tables with the lock trigger';
 
 -- Unlocks a tenant. Returns true if it was locked.
-create or replace function tenant_guard.unlock_tenant(p_tenant_id uuid)
+create or replace function tenant_guard.unlock_tenant(tenant_id uuid)
 returns boolean
 language plpgsql
 volatile
@@ -64,7 +66,7 @@ security definer
 set search_path = ''
 as $$
 begin
-  delete from tenant_guard.tenant_locks l where l.tenant_id = p_tenant_id;
+  delete from tenant_guard.tenant_locks l where l.tenant_id = unlock_tenant.tenant_id;
   return found;
 end;
 $$;
@@ -76,7 +78,7 @@ comment on function tenant_guard.unlock_tenant(uuid) is
 -- the current user belongs to and returns NULL otherwise, so it cannot be
 -- used to probe the billing state of other tenants. Admin tooling should
 -- read tenant_guard.tenant_locks directly.
-create or replace function tenant_guard.is_locked(p_tenant_id uuid)
+create or replace function tenant_guard.is_locked(tenant_id uuid)
 returns boolean
 language sql
 stable
@@ -84,8 +86,8 @@ security definer
 set search_path = ''
 as $$
   select case
-    when tenant_guard.is_member(p_tenant_id)
-      then exists (select 1 from tenant_guard.tenant_locks l where l.tenant_id = p_tenant_id)
+    when tenant_guard.is_member(is_locked.tenant_id)
+      then exists (select 1 from tenant_guard.tenant_locks l where l.tenant_id = is_locked.tenant_id)
   end;
 $$;
 
@@ -137,15 +139,15 @@ comment on function tenant_guard.enforce_tenant_lock() is
   'Trigger: rejects writes to rows of locked tenants, except the operations passed as trigger arguments';
 
 -- Attaches (or re-attaches) the lock trigger to a table with a tenant_id
--- column. p_allow_when_locked lists operations that stay allowed while the
+-- column. allow_when_locked lists operations that stay allowed while the
 -- tenant is locked; case-insensitive.
 --
 -- The trigger is named tenant_guard_lock. BEFORE triggers fire in name
 -- order, so a BEFORE trigger whose name sorts after it and that changes
 -- tenant_id would not be re-checked. Avoid changing tenant_id in triggers.
 create or replace function tenant_guard.attach_lock_trigger(
-  p_table             regclass,
-  p_allow_when_locked text[] default '{}'
+  tbl               regclass,
+  allow_when_locked text[] default '{}'
 )
 returns void
 language plpgsql
@@ -157,11 +159,11 @@ declare
   v_bad  text[];
   v_args text;
 begin
-  perform tenant_guard.assert_tenant_table(p_table);
+  perform tenant_guard.assert_tenant_table(tbl);
 
   select coalesce(array_agg(distinct upper(btrim(op)) order by upper(btrim(op))), '{}')
     into v_ops
-  from unnest(coalesce(p_allow_when_locked, '{}')) as op;
+  from unnest(coalesce(allow_when_locked, '{}')) as op;
 
   select array_agg(op) into v_bad
   from unnest(v_ops) as op
@@ -175,21 +177,21 @@ begin
   select string_agg(format('%L', op), ', ') into v_args from unnest(v_ops) as op;
 
   if exists (select 1 from pg_catalog.pg_trigger t
-             where t.tgrelid = p_table and t.tgname = 'tenant_guard_lock') then
-    execute format('drop trigger tenant_guard_lock on %s', p_table);
+             where t.tgrelid = tbl and t.tgname = 'tenant_guard_lock') then
+    execute format('drop trigger tenant_guard_lock on %s', tbl);
   end if;
 
   execute format(
     'create trigger tenant_guard_lock before insert or update or delete on %s
        for each row execute function tenant_guard.enforce_tenant_lock(%s)',
-    p_table, coalesce(v_args, ''));
+    tbl, coalesce(v_args, ''));
 end;
 $$;
 
 comment on function tenant_guard.attach_lock_trigger(regclass, text[]) is
   'Attaches the tenant lock trigger to a table; the array lists operations allowed while locked';
 
-create or replace function tenant_guard.detach_lock_trigger(p_table regclass)
+create or replace function tenant_guard.detach_lock_trigger(tbl regclass)
 returns void
 language plpgsql
 volatile
@@ -197,8 +199,8 @@ set search_path = ''
 as $$
 begin
   if exists (select 1 from pg_catalog.pg_trigger t
-             where t.tgrelid = p_table and t.tgname = 'tenant_guard_lock') then
-    execute format('drop trigger tenant_guard_lock on %s', p_table);
+             where t.tgrelid = tbl and t.tgname = 'tenant_guard_lock') then
+    execute format('drop trigger tenant_guard_lock on %s', tbl);
   end if;
 end;
 $$;

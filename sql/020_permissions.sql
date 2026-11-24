@@ -57,12 +57,12 @@ create policy role_permissions_select on tenant_guard.role_permissions
 -- True when the current user's role in the tenant grants `permission` with
 -- at least `mode` access. NULL arguments return false.
 --
--- Comparing enum values (`rp.access >= p_mode`) relies on the declaration
+-- Comparing enum values (`rp.access >= mode`) relies on the declaration
 -- order of access_mode: view < edit.
 create or replace function tenant_guard.has_permission(
-  p_tenant_id  uuid,
-  p_permission text,
-  p_mode       tenant_guard.access_mode default 'view'
+  tenant_id  uuid,
+  permission text,
+  mode       tenant_guard.access_mode default 'view'
 )
 returns boolean
 language sql
@@ -74,12 +74,12 @@ as $$
     select 1
     from tenant_guard.tenant_members m
     join tenant_guard.role_permissions rp on rp.role = m.role
-    where m.tenant_id = p_tenant_id
+    where m.tenant_id = has_permission.tenant_id
       and m.user_id = tenant_guard.current_user_id()
-      and rp.access >= p_mode
+      and rp.access >= has_permission.mode
       and (
-        rp.permission = p_permission
-        or (rp.permission = '*' and not starts_with(p_permission, 'tenant_guard.'))
+        rp.permission = has_permission.permission
+        or (rp.permission = '*' and not starts_with(has_permission.permission, 'tenant_guard.'))
       )
   );
 $$;
@@ -97,8 +97,8 @@ comment on function tenant_guard.has_permission(uuid, text, tenant_guard.access_
 -- function only once, but becomes a hashed SubPlan filter, which cannot use
 -- an index and scans the whole table.
 create or replace function tenant_guard.permitted_tenant_ids(
-  p_permission text,
-  p_mode       tenant_guard.access_mode default 'view'
+  permission text,
+  mode       tenant_guard.access_mode default 'view'
 )
 returns setof uuid
 language sql
@@ -110,10 +110,10 @@ as $$
   from tenant_guard.tenant_members m
   join tenant_guard.role_permissions rp on rp.role = m.role
   where m.user_id = tenant_guard.current_user_id()
-    and rp.access >= p_mode
+    and rp.access >= permitted_tenant_ids.mode
     and (
-      rp.permission = p_permission
-      or (rp.permission = '*' and not starts_with(p_permission, 'tenant_guard.'))
+      rp.permission = permitted_tenant_ids.permission
+      or (rp.permission = '*' and not starts_with(permitted_tenant_ids.permission, 'tenant_guard.'))
     );
 $$;
 

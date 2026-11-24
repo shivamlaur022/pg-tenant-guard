@@ -24,7 +24,7 @@ create index on public.payments (tenant_id);
 grant select, insert, update, delete on public.projects, public.payments to app_user;
 
 select tenant_guard.protect_table('public.projects');
-select tenant_guard.protect_table('public.payments', null, array['insert', 'UPDATE']);
+select tenant_guard.protect_table('public.payments', allow_when_locked => array['insert', 'UPDATE']);
 
 insert into public.projects (tenant_id, title) values
   (tests.tenant_id('acme'),   'acme roadmap'),

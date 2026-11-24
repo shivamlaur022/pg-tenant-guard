@@ -27,6 +27,9 @@ psql_in() {
   docker exec -i -e PGOPTIONS="-c client_min_messages=warning" "$CONTAINER" psql -X -q -v ON_ERROR_STOP=1 -U postgres -d "$DB" "$@"
 }
 
+# Tests run against the generated installer, i.e. exactly what users install.
+"$ROOT/scripts/build.sh" --check
+
 echo "==> Building test image for PostgreSQL ${PG_VERSION}"
 docker build --quiet --build-arg PG_VERSION="$PG_VERSION" -t "$IMAGE" "$ROOT/test/docker" >/dev/null
 
@@ -54,10 +57,15 @@ docker exec "$CONTAINER" psql -X -qtA -U postgres -c "select version()" | sed "s
 docker exec "$CONTAINER" createdb -U postgres "$DB"
 psql_in -c "create extension pgtap"
 
-echo "==> Installing pg-tenant-guard"
-for f in "$ROOT"/sql/*.sql; do
-  psql_in -o /dev/null -f "/work/sql/$(basename "$f")"
-done
+echo "==> Installing dist/pg-tenant-guard.sql (twice, to prove re-running it is safe)"
+psql_in -o /dev/null -f /work/dist/pg-tenant-guard.sql
+psql_in -c "insert into tenant_guard.tenants (name) values ('survives reinstall')"
+psql_in -o /dev/null -f /work/dist/pg-tenant-guard.sql
+if [[ "$(psql_in -tA -c "select count(*) from tenant_guard.tenants where name = 'survives reinstall'")" != "1" ]]; then
+  echo "Re-running the installer lost data" >&2
+  exit 1
+fi
+psql_in -c "delete from tenant_guard.tenants"
 psql_in -o /dev/null -f /work/test/setup.sql
 
 echo "==> Running tests"

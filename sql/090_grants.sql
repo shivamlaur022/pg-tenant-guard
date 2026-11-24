@@ -8,21 +8,21 @@
 -- for the whole schema; grant_to() hands back the client-facing ones.
 revoke execute on all functions in schema tenant_guard from public;
 
-create or replace function tenant_guard.grant_to(p_role name)
+create or replace function tenant_guard.grant_to(role_name name)
 returns void
 language plpgsql
 volatile
 set search_path = ''
 as $$
 begin
-  execute format('grant usage on schema tenant_guard to %I', p_role);
+  execute format('grant usage on schema tenant_guard to %I', role_name);
 
   -- Column-level UPDATE: clients may rename a tenant or change a member's
   -- role, but never move a row to another tenant or rewrite its id.
-  execute format('grant select, update (name) on tenant_guard.tenants to %I', p_role);
-  execute format('grant select, insert, update (role), delete on tenant_guard.tenant_members to %I', p_role);
-  execute format('grant select on tenant_guard.roles, tenant_guard.role_permissions to %I', p_role);
-  execute format('grant usage on type tenant_guard.access_mode to %I', p_role);
+  execute format('grant select, update (name) on tenant_guard.tenants to %I', role_name);
+  execute format('grant select, insert, update (role), delete on tenant_guard.tenant_members to %I', role_name);
+  execute format('grant select on tenant_guard.roles, tenant_guard.role_permissions to %I', role_name);
+  execute format('grant usage on type tenant_guard.access_mode to %I', role_name);
 
   execute format(
     'grant execute on function
@@ -34,7 +34,7 @@ begin
        tenant_guard.has_permission(uuid, text, tenant_guard.access_mode),
        tenant_guard.permitted_tenant_ids(text, tenant_guard.access_mode),
        tenant_guard.is_locked(uuid)
-     to %I', p_role);
+     to %I', role_name);
 end;
 $$;
 
