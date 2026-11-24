@@ -12,6 +12,10 @@
 
 begin;
 
+-- Keep the output readable: hide "does not exist, skipping" notices from the
+-- idempotent DROP ... IF EXISTS statements. Applies to this transaction only.
+set local client_min_messages = warning;
+
 -- ------------------------------------------------------------------------
 -- sql/001_schema.sql
 -- ------------------------------------------------------------------------

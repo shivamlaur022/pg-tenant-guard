@@ -30,6 +30,10 @@ render() {
 -- CREATE OR REPLACE, and seed rows use ON CONFLICT DO NOTHING.
 
 begin;
+
+-- Keep the output readable: hide "does not exist, skipping" notices from the
+-- idempotent DROP ... IF EXISTS statements. Applies to this transaction only.
+set local client_min_messages = warning;
 HEADER
   for f in "$ROOT"/sql/*.sql; do
     printf '\n-- %s\n-- %s\n-- %s\n\n' \
