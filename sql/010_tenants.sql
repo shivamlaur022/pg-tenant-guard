@@ -80,8 +80,8 @@ $$;
 comment on function tenant_guard.member_role(uuid) is
   'Role of the current user in the tenant, or NULL when not a member';
 
--- Set-returning form for policies: `tenant_id in (select tenant_guard.my_tenant_ids())`
--- is evaluated once per statement instead of once per row.
+-- Set-returning form for policies; see the note on permitted_tenant_ids() in
+-- 020_permissions.sql for why policies use `= any (array(select ...))`.
 create or replace function tenant_guard.my_tenant_ids()
 returns setof uuid
 language sql
@@ -138,13 +138,13 @@ alter table tenant_guard.roles enable row level security;
 drop policy if exists tenants_select on tenant_guard.tenants;
 create policy tenants_select on tenant_guard.tenants
   for select
-  using (id in (select tenant_guard.my_tenant_ids()));
+  using (id = any (array(select tenant_guard.my_tenant_ids())));
 
 -- Members can see who else belongs to their tenants.
 drop policy if exists tenant_members_select on tenant_guard.tenant_members;
 create policy tenant_members_select on tenant_guard.tenant_members
   for select
-  using (tenant_id in (select tenant_guard.my_tenant_ids()));
+  using (tenant_id = any (array(select tenant_guard.my_tenant_ids())));
 
 -- Policies for changing tenants and memberships are permission-based and
 -- defined in 020_permissions.sql.
