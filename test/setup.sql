@@ -45,6 +45,7 @@ begin
     select c.oid::regclass as rel, c.relkind
     from pg_class c
     where c.relnamespace = pg_my_temp_schema()
+      and c.relkind in ('r', 'S')
   loop
     if obj.relkind = 'S' then
       execute format('grant usage, select, update on sequence %s to app_user', obj.rel);
@@ -54,4 +55,39 @@ begin
   end loop;
   execute format('grant usage on schema %s to app_user', pg_my_temp_schema()::regnamespace);
 end;
+$$;
+
+select tenant_guard.grant_to('app_user');
+
+-- Deterministic ids so tests can refer to users and tenants by name.
+create function tests.user_id(p_name text)
+returns uuid
+language sql
+immutable
+as $$ select md5('user:' || p_name)::uuid $$;
+
+create function tests.tenant_id(p_name text)
+returns uuid
+language sql
+immutable
+as $$ select md5('tenant:' || p_name)::uuid $$;
+
+-- Standard fixture, created as the superuser before switching roles:
+--
+--   acme:   alice (owner), bob (editor), vera (viewer)
+--   globex: carol (owner)
+--   dave belongs to no tenant.
+create function tests.seed()
+returns void
+language sql
+as $$
+  insert into tenant_guard.tenants (id, name) values
+    (tests.tenant_id('acme'), 'Acme'),
+    (tests.tenant_id('globex'), 'Globex');
+
+  insert into tenant_guard.tenant_members (tenant_id, user_id, role) values
+    (tests.tenant_id('acme'),   tests.user_id('alice'), 'owner'),
+    (tests.tenant_id('acme'),   tests.user_id('bob'),   'editor'),
+    (tests.tenant_id('acme'),   tests.user_id('vera'),  'viewer'),
+    (tests.tenant_id('globex'), tests.user_id('carol'), 'owner');
 $$;
