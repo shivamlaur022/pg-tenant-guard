@@ -24,7 +24,7 @@ cleanup() {
 trap cleanup EXIT
 
 psql_in() {
-  docker exec -i "$CONTAINER" psql -X -q -v ON_ERROR_STOP=1 -U postgres -d "$DB" "$@"
+  docker exec -i -e PGOPTIONS="-c client_min_messages=warning" "$CONTAINER" psql -X -q -v ON_ERROR_STOP=1 -U postgres -d "$DB" "$@"
 }
 
 echo "==> Building test image for PostgreSQL ${PG_VERSION}"
@@ -56,9 +56,9 @@ psql_in -c "create extension pgtap"
 
 echo "==> Installing pg-tenant-guard"
 for f in "$ROOT"/sql/*.sql; do
-  psql_in -f "/work/sql/$(basename "$f")"
+  psql_in -o /dev/null -f "/work/sql/$(basename "$f")"
 done
-psql_in -f /work/test/setup.sql
+psql_in -o /dev/null -f /work/test/setup.sql
 
 echo "==> Running tests"
 if [[ $# -gt 0 ]]; then
