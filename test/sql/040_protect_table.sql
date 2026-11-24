@@ -183,17 +183,17 @@ create table public.text_tenant (tenant_id text);
 create view public.a_view as select 1 as tenant_id;
 select throws_ok(
   $$ select tenant_guard.protect_table('public.no_tenant') $$,
-  '42703', 'protect_table: public.no_tenant has no tenant_id column',
+  '42703', 'public.no_tenant has no tenant_id column',
   'a table without tenant_id is rejected'
 );
 select throws_ok(
   $$ select tenant_guard.protect_table('public.text_tenant') $$,
-  '42804', 'protect_table: public.text_tenant.tenant_id must be uuid, not text',
+  '42804', 'public.text_tenant.tenant_id must be uuid, not text',
   'a non-uuid tenant_id is rejected'
 );
 select throws_ok(
   $$ select tenant_guard.protect_table('public.a_view') $$,
-  '42809', 'protect_table: public.a_view is not a table',
+  '42809', 'public.a_view is not a table',
   'a view is rejected'
 );
 
@@ -220,7 +220,7 @@ select ok(
 
 -- Client roles cannot run the DDL helpers ---------------------------------------------
 select ok(
-  not has_function_privilege('app_user', 'tenant_guard.protect_table(regclass, text)', 'execute'),
+  not has_function_privilege('app_user', 'tenant_guard.protect_table(regclass, text, text[])', 'execute'),
   'clients cannot call protect_table'
 );
 select ok(

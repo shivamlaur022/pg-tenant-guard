@@ -62,3 +62,49 @@ $$;
 
 comment on function tenant_guard.current_user_id() is
   'Id of the requesting end user: auth.uid() if present, else JWT claim sub, else the tenant_guard.user_id setting';
+
+-- Internal: checks that a relation is a table with a `tenant_id uuid` column
+-- and returns that column's attribute number. Used by the DDL helpers.
+create or replace function tenant_guard.assert_tenant_table(p_table regclass)
+returns smallint
+language plpgsql
+stable
+set search_path = ''
+as $$
+declare
+  v_relkind "char";
+  v_type    regtype;
+  v_attnum  smallint;
+begin
+  select c.relkind into v_relkind
+  from pg_catalog.pg_class c
+  where c.oid = p_table;
+
+  if v_relkind is null or v_relkind not in ('r', 'p') then
+    raise exception '% is not a table', p_table
+      using errcode = 'wrong_object_type';
+  end if;
+
+  select a.atttypid::regtype, a.attnum into v_type, v_attnum
+  from pg_catalog.pg_attribute a
+  where a.attrelid = p_table
+    and a.attname = 'tenant_id'
+    and a.attnum > 0
+    and not a.attisdropped;
+
+  if v_type is null then
+    raise exception '% has no tenant_id column', p_table
+      using errcode = 'undefined_column';
+  end if;
+
+  if v_type <> 'uuid'::regtype then
+    raise exception '%.tenant_id must be uuid, not %', p_table, v_type
+      using errcode = 'datatype_mismatch';
+  end if;
+
+  return v_attnum;
+end;
+$$;
+
+comment on function tenant_guard.assert_tenant_table(regclass) is
+  'Internal: raises unless the relation is a table with a tenant_id uuid column';

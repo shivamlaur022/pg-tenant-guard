@@ -32,7 +32,8 @@ begin
        tenant_guard.my_tenant_ids(),
        tenant_guard.create_tenant(text),
        tenant_guard.has_permission(uuid, text, tenant_guard.access_mode),
-       tenant_guard.permitted_tenant_ids(text, tenant_guard.access_mode)
+       tenant_guard.permitted_tenant_ids(text, tenant_guard.access_mode),
+       tenant_guard.is_locked(uuid)
      to %I', p_role);
 end;
 $$;
