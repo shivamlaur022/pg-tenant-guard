@@ -107,3 +107,19 @@ begin
   return result;
 end;
 $$;
+
+-- Runs a statement that is expected to fail and returns the error's DETAIL.
+create function tests.error_detail(p_sql text)
+returns text
+language plpgsql
+as $$
+declare
+  v_detail text;
+begin
+  execute p_sql;
+  return null;
+exception when others then
+  get stacked diagnostics v_detail = pg_exception_detail;
+  return v_detail;
+end;
+$$;

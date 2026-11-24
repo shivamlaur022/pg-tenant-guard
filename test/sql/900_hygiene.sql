@@ -44,14 +44,20 @@ select is(
    from pg_proc p
    where p.pronamespace = 'tenant_guard'::regnamespace
      and p.prosecdef and p.provolatile = 's'),
-  array['has_permission', 'is_member', 'member_role', 'my_tenant_ids', 'permitted_tenant_ids'],
+  array['has_permission', 'is_locked', 'is_member', 'member_role', 'my_tenant_ids', 'permitted_tenant_ids'],
   'access helpers are SECURITY DEFINER and STABLE'
 );
 
--- Administrative functions stay out of reach of client roles.
-select ok(
-  not has_function_privilege('app_user', 'tenant_guard.grant_to(name)', 'execute'),
-  'client roles cannot call grant_to()'
+-- Client roles can execute exactly the client-facing functions. Everything
+-- else (DDL helpers, lock administration, grant_to) is owner-only.
+select is(
+  (select array_agg(p.proname::text order by p.proname)
+   from pg_proc p
+   where p.pronamespace = 'tenant_guard'::regnamespace
+     and has_function_privilege('app_user', p.oid, 'execute')),
+  array['create_tenant', 'current_user_id', 'has_permission', 'is_locked',
+        'is_member', 'member_role', 'my_tenant_ids', 'permitted_tenant_ids'],
+  'client roles can execute exactly the client-facing functions'
 );
 
 select * from finish();
