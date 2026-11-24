@@ -46,7 +46,7 @@ comment on table tenant_guard.roles is 'Roles a member can hold; permissions per
 -- qualifies every name, so a caller cannot redirect a lookup by creating
 -- objects in a schema that appears earlier on their search_path.
 
-create or replace function tenant_guard.is_member(p_tenant_id uuid)
+create or replace function tenant_guard.is_member(tenant_id uuid)
 returns boolean
 language sql
 stable
@@ -56,7 +56,7 @@ as $$
   select exists (
     select 1
     from tenant_guard.tenant_members m
-    where m.tenant_id = p_tenant_id
+    where m.tenant_id = is_member.tenant_id
       and m.user_id = tenant_guard.current_user_id()
   );
 $$;
@@ -64,7 +64,7 @@ $$;
 comment on function tenant_guard.is_member(uuid) is
   'True when the current user is a member of the tenant';
 
-create or replace function tenant_guard.member_role(p_tenant_id uuid)
+create or replace function tenant_guard.member_role(tenant_id uuid)
 returns text
 language sql
 stable
@@ -73,7 +73,7 @@ set search_path = ''
 as $$
   select m.role
   from tenant_guard.tenant_members m
-  where m.tenant_id = p_tenant_id
+  where m.tenant_id = member_role.tenant_id
     and m.user_id = tenant_guard.current_user_id();
 $$;
 
@@ -100,7 +100,7 @@ comment on function tenant_guard.my_tenant_ids() is
 -- Creates a tenant and makes the calling user its owner, in one step. Clients
 -- have no INSERT privilege on tenants, so this is the only self-service way to
 -- create one.
-create or replace function tenant_guard.create_tenant(p_name text)
+create or replace function tenant_guard.create_tenant(name text)
 returns uuid
 language plpgsql
 volatile
@@ -116,7 +116,7 @@ begin
       using errcode = 'insufficient_privilege';
   end if;
 
-  insert into tenant_guard.tenants (name) values (p_name)
+  insert into tenant_guard.tenants (name) values (create_tenant.name)
   returning id into v_tenant;
 
   insert into tenant_guard.tenant_members (tenant_id, user_id, role)

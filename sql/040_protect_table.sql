@@ -5,7 +5,7 @@
 -- SECURITY INVOKER on purpose: running them as anyone other than the caller
 -- would let a client enable or drop policies on tables it does not own.
 
--- Applies four policies to `p_table`:
+-- Applies four policies to `tbl`:
 --
 --   SELECT  rows of tenants where the user has `permission` view access
 --   INSERT  new rows must belong to a tenant where the user has edit access
@@ -15,17 +15,17 @@
 --   DELETE  only rows the user can edit
 --
 -- It also attaches the tenant lock trigger (030_tenant_lock.sql), passing
--- `p_allow_when_locked` through: the operations that stay allowed on this
+-- `allow_when_locked` through: the operations that stay allowed on this
 -- table while the tenant is locked.
 --
--- `p_permission` defaults to the table's name (without schema), which the
+-- `permission` defaults to the table's name (without schema), which the
 -- default roles match through the '*' wildcard. Safe to call again: the
 -- policies are dropped and recreated, so it also works for changing the
 -- permission name.
 create or replace function tenant_guard.protect_table(
-  p_table             regclass,
-  p_permission        text default null,
-  p_allow_when_locked text[] default '{}'
+  tbl               regclass,
+  permission        text default null,
+  allow_when_locked text[] default '{}'
 )
 returns void
 language plpgsql
@@ -39,11 +39,11 @@ declare
   v_edit_check text;
   v_policy     name;
 begin
-  v_attnum := tenant_guard.assert_tenant_table(p_table);
+  v_attnum := tenant_guard.assert_tenant_table(tbl);
 
-  select coalesce(p_permission, c.relname) into v_permission
+  select coalesce(protect_table.permission, c.relname) into v_permission
   from pg_catalog.pg_class c
-  where c.oid = p_table;
+  where c.oid = tbl;
 
   v_view_check := format(
     'tenant_id = any (array(select tenant_guard.permitted_tenant_ids(%L, %L)))', v_permission, 'view');
@@ -51,36 +51,36 @@ begin
     'tenant_id = any (array(select tenant_guard.permitted_tenant_ids(%L, %L)))', v_permission, 'edit');
 
   -- With search_path = '', regclass prints schema-qualified, quoted names.
-  execute format('alter table %s enable row level security', p_table);
+  execute format('alter table %s enable row level security', tbl);
 
   for v_policy in
     select p.polname from pg_catalog.pg_policy p
-    where p.polrelid = p_table
+    where p.polrelid = tbl
       and p.polname in ('tenant_guard_select', 'tenant_guard_insert',
                         'tenant_guard_update', 'tenant_guard_delete')
   loop
-    execute format('drop policy %I on %s', v_policy, p_table);
+    execute format('drop policy %I on %s', v_policy, tbl);
   end loop;
 
   execute format('create policy tenant_guard_select on %s for select using (%s)',
-                 p_table, v_view_check);
+                 tbl, v_view_check);
   execute format('create policy tenant_guard_insert on %s for insert with check (%s)',
-                 p_table, v_edit_check);
+                 tbl, v_edit_check);
   execute format('create policy tenant_guard_update on %s for update using (%s) with check (%s)',
-                 p_table, v_edit_check, v_edit_check);
+                 tbl, v_edit_check, v_edit_check);
   execute format('create policy tenant_guard_delete on %s for delete using (%s)',
-                 p_table, v_edit_check);
+                 tbl, v_edit_check);
 
-  perform tenant_guard.attach_lock_trigger(p_table, p_allow_when_locked);
+  perform tenant_guard.attach_lock_trigger(tbl, allow_when_locked);
 
   -- RLS adds a tenant_id filter to every query. Without an index that starts
   -- with tenant_id, that filter is a sequential scan.
   if not exists (
     select 1 from pg_catalog.pg_index i
-    where i.indrelid = p_table and i.indkey[0] = v_attnum
+    where i.indrelid = tbl and i.indkey[0] = v_attnum
   ) then
     raise notice 'protect_table: % has no index starting with tenant_id; consider: create index on % (tenant_id)',
-      p_table, p_table;
+      tbl, tbl;
   end if;
 end;
 $$;
@@ -92,7 +92,7 @@ comment on function tenant_guard.protect_table(regclass, text, text[]) is
 -- security stays enabled, so
 -- the table becomes deny-all for client roles rather than wide open. Disable
 -- it yourself if that is really what you want.
-create or replace function tenant_guard.unprotect_table(p_table regclass)
+create or replace function tenant_guard.unprotect_table(tbl regclass)
 returns void
 language plpgsql
 volatile
@@ -103,14 +103,14 @@ declare
 begin
   for v_policy in
     select p.polname from pg_catalog.pg_policy p
-    where p.polrelid = p_table
+    where p.polrelid = tbl
       and p.polname in ('tenant_guard_select', 'tenant_guard_insert',
                         'tenant_guard_update', 'tenant_guard_delete')
   loop
-    execute format('drop policy %I on %s', v_policy, p_table);
+    execute format('drop policy %I on %s', v_policy, tbl);
   end loop;
 
-  perform tenant_guard.detach_lock_trigger(p_table);
+  perform tenant_guard.detach_lock_trigger(tbl);
 end;
 $$;
 

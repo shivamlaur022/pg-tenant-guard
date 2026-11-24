@@ -12,6 +12,17 @@ comment on schema tenant_guard is
 -- access explicitly with tenant_guard.grant_to() (see the grants file).
 revoke all on schema tenant_guard from public;
 
+-- Installed version. scripts/build.sh reads the version from this function
+-- for the header of dist/pg-tenant-guard.sql.
+create or replace function tenant_guard.version()
+returns text
+language sql
+immutable
+set search_path = ''
+as $$ select '0.1.0' $$;
+
+comment on function tenant_guard.version() is 'Installed pg-tenant-guard version';
+
 -- Returns the id of the end user making the current request, or NULL for an
 -- anonymous request. Resolution order:
 --
@@ -65,7 +76,7 @@ comment on function tenant_guard.current_user_id() is
 
 -- Internal: checks that a relation is a table with a `tenant_id uuid` column
 -- and returns that column's attribute number. Used by the DDL helpers.
-create or replace function tenant_guard.assert_tenant_table(p_table regclass)
+create or replace function tenant_guard.assert_tenant_table(tbl regclass)
 returns smallint
 language plpgsql
 stable
@@ -78,27 +89,27 @@ declare
 begin
   select c.relkind into v_relkind
   from pg_catalog.pg_class c
-  where c.oid = p_table;
+  where c.oid = tbl;
 
   if v_relkind is null or v_relkind not in ('r', 'p') then
-    raise exception '% is not a table', p_table
+    raise exception '% is not a table', tbl
       using errcode = 'wrong_object_type';
   end if;
 
   select a.atttypid::regtype, a.attnum into v_type, v_attnum
   from pg_catalog.pg_attribute a
-  where a.attrelid = p_table
+  where a.attrelid = tbl
     and a.attname = 'tenant_id'
     and a.attnum > 0
     and not a.attisdropped;
 
   if v_type is null then
-    raise exception '% has no tenant_id column', p_table
+    raise exception '% has no tenant_id column', tbl
       using errcode = 'undefined_column';
   end if;
 
   if v_type <> 'uuid'::regtype then
-    raise exception '%.tenant_id must be uuid, not %', p_table, v_type
+    raise exception '%.tenant_id must be uuid, not %', tbl, v_type
       using errcode = 'datatype_mismatch';
   end if;
 

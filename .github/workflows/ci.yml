@@ -23,7 +23,10 @@ jobs:
         pg: ["16", "17"]
     steps:
       - uses: actions/checkout@v4
+      - name: Installer is up to date
+        run: ./scripts/build.sh --check
       - name: Run pgTAP suite
-        run: make test PG_VERSION=${{ matrix.pg }}
+        run: ./scripts/test.sh
         env:
+          PG_VERSION: ${{ matrix.pg }}
           VERBOSE: "1"

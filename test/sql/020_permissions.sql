@@ -1,6 +1,6 @@
 -- Role permissions: view vs edit, the '*' wildcard, built-in permissions.
 begin;
-select plan(27);
+select plan(28);
 select tests.share_tap_state();
 select tests.seed();
 
@@ -32,6 +32,10 @@ select is_empty(
 -- editor ---------------------------------------------------------------------
 select tests.authenticate_as(tests.user_id('bob'));
 select ok(tenant_guard.has_permission(tests.tenant_id('acme'), 'projects', 'edit'), 'editor can edit projects');
+select ok(
+  tenant_guard.has_permission(tenant_id => tests.tenant_id('acme'), permission => 'projects', mode => 'edit'),
+  'named arguments use the documented parameter names'
+);
 select ok(tenant_guard.has_permission(tests.tenant_id('acme'), 'projects', 'view'), 'edit implies view');
 select ok(not tenant_guard.has_permission(tests.tenant_id('globex'), 'projects', 'view'), 'editor has no access to another tenant');
 select ok(
